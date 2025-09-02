@@ -1,19 +1,19 @@
-name: Deploy to Staging
+name: Deploy to Production
 
 on:
   push:
-    branches: [staging]
-  pull_request:
-    branches: [staging]
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
 
 env:
   PROJECT_ID: caminu-127c0352
   REGION: us-central1
-  SERVICE_NAME: trump-letter-drafts-824408-staging
+  SERVICE_NAME: trump-letter-drafts-824408-prod
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production  # Requires approval
     
     permissions:
       contents: read
@@ -48,39 +48,47 @@ jobs:
         run: |
           docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:${{ github.sha }} .
           docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:latest .
+          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:stable .
 
       - name: Push Docker image
         run: |
           docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:latest
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:stable
 
-      - name: Deploy to Cloud Run (Staging)
+      - name: Deploy to Cloud Run (Production)
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/caminu-agents/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --memory 512Mi \
-            --set-env-vars ENVIRONMENT=staging \
-            --set-secrets OPENAI_API_KEY=projects/caminu-469013/secrets/openai-api-key:latest
+            --memory 1Gi \
+            --cpu 2 \
+            --min-instances 1 \
+            --max-instances 100 \
+            --set-env-vars ENVIRONMENT=production \
+            --set-secrets OPENAI_API_KEY=openai-api-key:latest
 
       - name: Get Service URL
         run: |
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region ${{ env.REGION }} \
             --format 'value(status.url)')
-          echo "Staging URL: $SERVICE_URL"
+          echo "Production URL: $SERVICE_URL"
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
 
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `🚀 Deployed to staging: ${{ env.SERVICE_URL }}`
-            })
+          tag_name: v${{ github.sha }}
+          release_name: Production Deploy ${{ github.sha }}
+          body: |
+            Production deployment successful!
+            
+            Service URL: ${{ env.SERVICE_URL }}
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
