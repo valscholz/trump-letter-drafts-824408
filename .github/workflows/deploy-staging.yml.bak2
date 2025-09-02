@@ -63,7 +63,7 @@ jobs:
             --allow-unauthenticated \
             --memory 512Mi \
             --set-env-vars ENVIRONMENT=staging \
-            --set-secrets OPENAI_API_KEY=caminu-469013.openai-api-key:latest
+            --set-secrets OPENAI_API_KEY=projects/caminu-469013/secrets/openai-api-key:latest
 
       - name: Get Service URL
         run: |

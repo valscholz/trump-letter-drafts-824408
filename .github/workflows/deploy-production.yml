@@ -68,7 +68,7 @@ jobs:
             --min-instances 1 \
             --max-instances 100 \
             --set-env-vars ENVIRONMENT=production \
-            --set-secrets OPENAI_API_KEY=projects/caminu-469013/secrets/openai-api-key:latest
+            --set-secrets OPENAI_API_KEY=caminu-469013.openai-api-key:latest
 
       - name: Get Service URL
         run: |
